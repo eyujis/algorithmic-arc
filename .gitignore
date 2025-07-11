@@ -1,0 +1,69 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Logs and swap files
+*.log
+*.swp
+
+# Virtual environments
+.env
+.venv/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS-specific files
+.DS_Store
+
+# Native extensions
+*.so
+*.pyd
+
+# === C / C++ ===
+
+# Object files
+*.o
+*.obj
+
+# Static and dynamic libs
+*.a
+*.lib
+*.dll
+*.dylib
+*.so
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build directories
+/build/
+/bin/
+/debug/
+/release/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Autotools
+config.log
+config.status
+configure
+autom4te.cache/
+aclocal.m4
+compile
+depcomp
+install-sh
+ltmain.sh
+missing
+Makefile.in
+Makefile.am

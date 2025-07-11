@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define MATRIX_SIZE 4
-#define RULE_BYTES 64
+#define RULE_BYTES 64 // 2^9 = 512 rules, divided by 8 (bit to byte)
 
 typedef uint8_t Matrix[MATRIX_SIZE][MATRIX_SIZE];
 

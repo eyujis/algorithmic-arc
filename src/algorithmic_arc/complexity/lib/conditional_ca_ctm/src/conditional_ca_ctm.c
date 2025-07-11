@@ -28,12 +28,12 @@ uint8_t get_neighborhood(const Matrix mat, int row, int col, int boundary_mode) 
         for (int dc = -1; dc <= 1; ++dc) {
             int r = row + dr;
             int c = col + dc;
-            if (boundary_mode == 1) {
+            if (boundary_mode == 1) { // toroidal
                 r = (r + MATRIX_SIZE) % MATRIX_SIZE;
                 c = (c + MATRIX_SIZE) % MATRIX_SIZE;
                 code |= (mat[r][c] & 1) << idx++;
             } else {
-                if (r < 0 || r >= MATRIX_SIZE || c < 0 || c >= MATRIX_SIZE)
+                if (r < 0 || r >= MATRIX_SIZE || c < 0 || c >= MATRIX_SIZE) // zero-padded
                     code |= 0 << idx++;
                 else
                     code |= (mat[r][c] & 1) << idx++;

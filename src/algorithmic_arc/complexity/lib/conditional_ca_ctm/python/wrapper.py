@@ -14,7 +14,7 @@ ffi.cdef("""
         int boundary_mode,
         int max_steps,
         double* ms_out,
-        double* ks_out
+        double* ctm_out
     );
 """)
 
@@ -34,7 +34,7 @@ def compute_conditional_ca_ctm(xs, ys, num_rules=100000, seed=42, boundary_mode=
     ys_flat = ys.reshape(num_pairs, 16).astype("uint32")
 
     ms_out = np.zeros(num_pairs, dtype="float64")
-    ks_out = np.zeros(num_pairs, dtype="float64")
+    ctm_out = np.zeros(num_pairs, dtype="float64")
 
     C.run_ctm(
         ffi.cast("uint32_t*", xs_flat.ctypes.data),
@@ -45,7 +45,7 @@ def compute_conditional_ca_ctm(xs, ys, num_rules=100000, seed=42, boundary_mode=
         boundary_mode,
         max_steps,
         ffi.cast("double*", ms_out.ctypes.data),
-        ffi.cast("double*", ks_out.ctypes.data),
+        ffi.cast("double*", ctm_out.ctypes.data),
     )
 
-    return list(zip(ks_out, ms_out))
+    return list(zip(ctm_out, ms_out))

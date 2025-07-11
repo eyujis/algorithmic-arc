@@ -115,7 +115,7 @@ void run_ctm(
     int boundary_mode,
     int max_steps,
     double* ms_out,
-    double* ks_out
+    double* ctms_out
 ) {
     stop_requested = 0;
     signal(SIGINT, handle_sigint);
@@ -150,7 +150,7 @@ void run_ctm(
         }
 
         ms_out[i] = (double)count / num_rules;
-        ks_out[i] = (count > 0) ? -log2(ms_out[i]) : INFINITY;
+        ctms_out[i] = (count > 0) ? -log2(ms_out[i]) : INFINITY;
     }
 
     free(rules);

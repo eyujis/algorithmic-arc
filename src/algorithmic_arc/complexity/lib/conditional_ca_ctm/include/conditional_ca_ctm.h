@@ -12,7 +12,7 @@ void run_ctm(
     int boundary_mode,
     int max_steps,
     double* ms_out,
-    double* ks_out
+    double* ctms_out
 );
 
 #endif

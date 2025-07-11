@@ -12,7 +12,10 @@ void run_ctm(
     int boundary_mode,
     int max_steps,
     double* ms_out,
-    double* ctms_out
+    double* ctms_out,
+    int** match_rule_indices,  // [num_pairs][match_counts[i]]
+    int** match_rule_depths,   // [num_pairs][match_counts[i]]
+    int* match_counts          // [num_pairs] — how many rules matched for each pair
 );
 
 #endif

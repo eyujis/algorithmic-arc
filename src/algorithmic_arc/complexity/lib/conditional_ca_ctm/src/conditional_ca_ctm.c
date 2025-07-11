@@ -33,7 +33,7 @@ uint8_t get_neighborhood(const Matrix mat, int row, int col, int boundary_mode) 
                 c = (c + MATRIX_SIZE) % MATRIX_SIZE;
                 code |= (mat[r][c] & 1) << idx++;
             } else {
-                if (r < 0 || r >= MATRIX_SIZE || c < 0 || c >= MATRIX_SIZE) // zero-padded
+                if (r < 0 || r >= MATRIX_SIZE || c < 0 || c >= MATRIX_SIZE) // zero padded
                     code |= 0 << idx++;
                 else
                     code |= (mat[r][c] & 1) << idx++;
@@ -63,7 +63,7 @@ void apply_rule(Matrix out, const Matrix in, const Rule512* rule, int boundary_m
         }
 }
 
-int simulate(Matrix x_init, Matrix y_target, const Rule512* rule, int boundary_mode, int max_steps) {
+int simulate_with_depth(Matrix x_init, Matrix y_target, const Rule512* rule, int boundary_mode, int max_steps) {
     if (max_steps <= 0) max_steps = DEFAULT_MAX_STEPS;
 
     Matrix current, next;
@@ -79,31 +79,29 @@ int simulate(Matrix x_init, Matrix y_target, const Rule512* rule, int boundary_m
     for (int t = 0; t < max_steps; ++t) {
         if (stop_requested) {
             free(seen_hashes);
-            return 0;
+            return -1;
         }
 
         if (matrix_equals(current, y_target)) {
             free(seen_hashes);
-            return 1;
+            return t;
         }
 
         uint64_t h = matrix_hash(current);
         for (int i = 0; i < seen_count; ++i) {
             if (seen_hashes[i] == h) {
                 free(seen_hashes);
-                return 0;
+                return -1;
             }
         }
 
         seen_hashes[seen_count++] = h;
         apply_rule(next, current, rule, boundary_mode);
         copy_matrix(current, next);
-
-        if (seen_count >= max_steps) break;
     }
 
     free(seen_hashes);
-    return 0;
+    return -1;
 }
 
 void run_ctm(
@@ -115,7 +113,10 @@ void run_ctm(
     int boundary_mode,
     int max_steps,
     double* ms_out,
-    double* ctms_out
+    double* ctms_out,
+    int** match_rule_indices,
+    int** match_rule_depths,
+    int* match_counts
 ) {
     stop_requested = 0;
     signal(SIGINT, handle_sigint);
@@ -142,13 +143,28 @@ void run_ctm(
         flat_to_matrix(x, &xs_flat[i * 16]);
         flat_to_matrix(y, &ys_flat[i * 16]);
 
-        int count = 0;
+        match_counts[i] = 0;
+
+        // Temporary storage (over-allocate up to num_rules)
+        match_rule_indices[i] = malloc(sizeof(int) * num_rules);
+        match_rule_depths[i]  = malloc(sizeof(int) * num_rules);
+
+        if (!match_rule_indices[i] || !match_rule_depths[i]) {
+            fprintf(stderr, "Memory allocation failed for match results.\n");
+            exit(EXIT_FAILURE);
+        }
+
         for (int r = 0; r < num_rules; ++r) {
-            if (simulate(x, y, &rules[r], boundary_mode, max_steps)) {
-                count++;
+            int depth = simulate_with_depth(x, y, &rules[r], boundary_mode, max_steps);
+            if (depth >= 0) {
+                int idx = match_counts[i];
+                match_rule_indices[i][idx] = r;
+                match_rule_depths[i][idx] = depth;
+                match_counts[i]++;
             }
         }
 
+        int count = match_counts[i];
         ms_out[i] = (double)count / num_rules;
         ctms_out[i] = (count > 0) ? -log2(ms_out[i]) : INFINITY;
     }

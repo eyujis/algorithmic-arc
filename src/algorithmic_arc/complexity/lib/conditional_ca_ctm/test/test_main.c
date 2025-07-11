@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
 #include "conditional_ca_ctm.h"
@@ -38,10 +39,40 @@ int main() {
 
     double ms_out[2], ks_out[2];
 
-    run_ctm(xs_flat, ys_flat, num_pairs, num_rules, seed, boundary_mode, max_steps, ms_out, ks_out);
+    // === Allocate match info ===
+    int* match_rule_indices[2];
+    int* match_rule_depths[2];
+    int match_counts[2];
+
+    run_ctm(
+        xs_flat,
+        ys_flat,
+        num_pairs,
+        num_rules,
+        seed,
+        boundary_mode,
+        max_steps,
+        ms_out,
+        ks_out,
+        match_rule_indices,
+        match_rule_depths,
+        match_counts
+    );
 
     for (int i = 0; i < num_pairs; ++i) {
-        printf("Pair %d: m=%.6f, k=%.6f\n", i, ms_out[i], ks_out[i]);
+        printf("Pair %d: m = %.6f, k = %.6f, matches = %d\n", i, ms_out[i], ks_out[i], match_counts[i]);
+        for (int j = 0; j < match_counts[i] && j < 5; ++j) {
+            printf("  Rule %d → depth %d\n", match_rule_indices[i][j], match_rule_depths[i][j]);
+        }
+        if (match_counts[i] > 5) {
+            printf("  ... (%d total)\n", match_counts[i]);
+        }
+    }
+
+    // === Free allocated match arrays ===
+    for (int i = 0; i < num_pairs; ++i) {
+        free(match_rule_indices[i]);
+        free(match_rule_depths[i]);
     }
 
     return 0;

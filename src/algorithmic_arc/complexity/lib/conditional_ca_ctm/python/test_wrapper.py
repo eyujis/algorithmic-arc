@@ -42,10 +42,18 @@ y2 = np.array([
 xs = np.stack([x1, x2])
 ys = np.stack([y1, y2])
 
-
 # Run the Conditional CA-CTM
 results = compute_conditional_ca_ctm(xs, ys, num_rules=1_000_000, seed=123, boundary_mode=1)
 
 # Show results
-for i, (k, m) in enumerate(results):
+for i, result in enumerate(results):
+    k, m, matches = result
     print(f"\nResult {i}: k(y|x) = {k:.4f}, m(y|x) = {m:.4f}")
+    if matches:
+        print(f"  First 5 matches (rule index → logical depth):")
+        for rule_idx, depth in matches[:5]:
+            print(f"    Rule {rule_idx} → depth {depth}")
+        if len(matches) > 5:
+            print(f"    ... ({len(matches)} total)")
+    else:
+        print("  No matching rules found.")

@@ -1,59 +1,36 @@
 import numpy as np
 from wrapper import compute_conditional_ca_ctm
 
-def print_matrix(name, mat):
-    print(f"{name}:")
-    print("[")
-    for row in mat:
-        print(" ", list(row))
-    print("]")
+# Define 2 input matrices (x) and their respective target outputs (y)
+xs = np.array([
+    [[0, 0, 0, 0],
+     [0, 1, 1, 0],
+     [0, 1, 1, 0],
+     [0, 0, 0, 0]],
 
-# === Pair 1 ===
-x1 = np.array([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 1, 0],
-    [0, 0, 0, 1]
-], dtype=np.uint32)
+    [[0, 0, 1, 0],
+     [0, 1, 0, 1],
+     [1, 0, 1, 0],
+     [0, 0, 1, 0]],
+], dtype=np.uint8)
 
-y1 = np.array([
-    [1, 1, 0, 0],
-    [0, 1, 1, 0],
-    [0, 0, 1, 1],
-    [1, 0, 0, 1]
-], dtype=np.uint32)
+ys = np.array([
+    [[0, 0, 0, 0],
+     [0, 0, 1, 0],
+     [0, 1, 0, 0],
+     [0, 0, 0, 0]],
 
-# === Pair 2 ===
-x2 = np.array([
-    [0, 1, 1, 0],
-    [0, 1, 1, 0],
-    [0, 1, 1, 0],
-    [0, 1, 1, 0]
-], dtype=np.uint32)
+    [[0, 0, 0, 0],
+     [1, 1, 1, 0],
+     [1, 1, 1, 0],
+     [0, 0, 0, 0]],
+], dtype=np.uint8)
 
-y2 = np.array([
-    [1, 1, 0, 0],
-    [1, 1, 0, 0],
-    [1, 1, 0, 0],
-    [1, 1, 0, 0]
-], dtype=np.uint32)
+# Run the Conditional CA-CTM computation
+results = compute_conditional_ca_ctm(xs, ys, num_rules=1000000, seed=123)
 
-# Stack input/output arrays
-xs = np.stack([x1, x2])
-ys = np.stack([y1, y2])
-
-# Run the Conditional CA-CTM
-results = compute_conditional_ca_ctm(xs, ys, num_rules=1_000_000, seed=123, boundary_mode=1)
-
-# Show results
-for i, result in enumerate(results):
-    k, m, matches = result
-    print(f"\nResult {i}: k(y|x) = {k:.4f}, m(y|x) = {m:.4f}")
-    if matches:
-        print(f"  First 5 matches (rule index → logical depth):")
-        for rule_idx, depth in matches[:5]:
-            print(f"    Rule {rule_idx} → depth {depth}")
-        if len(matches) > 5:
-            print(f"    ... ({len(matches)} total)")
-    else:
-        print("  No matching rules found.")
+# Print results
+for i, (ctm, m, matches) in enumerate(results):
+    print(f"Pair {i}: CTM = {ctm:.5f}, m = {m:.5f}, matches = {len(matches)}")
+    for rule, depth in matches[:3]:
+        print(f"  Rule {rule} → depth {depth}")

@@ -1,10 +1,11 @@
-from cffi import FFI
 import os
+import platform
 import numpy as np
+from cffi import FFI
 
 ffi = FFI()
 
-# Match the updated C header
+# C function declaration
 ffi.cdef("""
     void run_ctm(
         uint32_t* xs_flat,
@@ -16,20 +17,31 @@ ffi.cdef("""
         int max_steps,
         double* ms_out,
         double* ctms_out,
-        int** match_rule_indices,
+        uint64_t*** match_rule_numbers,
         int** match_rule_depths,
         int* match_counts
     );
+
+    void free_matches(
+        int num_pairs,
+        int* match_counts,
+        int** match_rule_depths,
+        uint64_t*** match_rule_numbers
+    );
 """)
 
-# Load the shared library
-lib_path = os.path.join(os.path.dirname(__file__), '..', 'build', 'libconditional_ca_ctm.so')
+# Determine correct shared library extension
+ext = 'dylib' if platform.system() == 'Darwin' else 'so'
+lib_name = f'libconditional_ca_ctm.{ext}'
+lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'build', lib_name))
+
+# Load shared library
 C = ffi.dlopen(lib_path)
 
-def compute_conditional_ca_ctm(xs, ys, num_rules=100000, seed=42, boundary_mode=1, max_steps=65536):
+def compute_conditional_ca_ctm(xs, ys, num_rules=1_000_000, seed=42, boundary_mode=1, max_steps=65536):
     num_pairs = len(xs)
     assert xs.shape == ys.shape
-    assert xs.shape[1:] == (4, 4), "Each matrix must be 4x4"
+    assert xs.shape[1:] == (4, 4), "Each matrix must be 4×4"
 
     xs_flat = xs.reshape(num_pairs, 16).astype("uint32")
     ys_flat = ys.reshape(num_pairs, 16).astype("uint32")
@@ -37,12 +49,9 @@ def compute_conditional_ca_ctm(xs, ys, num_rules=100000, seed=42, boundary_mode=
     ms_out = np.zeros(num_pairs, dtype="float64")
     ctms_out = np.zeros(num_pairs, dtype="float64")
 
-    # Allocate match_counts (how many rules matched for each pair)
     match_counts = ffi.new("int[]", num_pairs)
-
-    # Allocate arrays of pointers for each pair
-    match_rule_indices = ffi.new("int*[]", num_pairs)
     match_rule_depths = ffi.new("int*[]", num_pairs)
+    match_rule_numbers = ffi.new("uint64_t**[]", num_pairs)
 
     C.run_ctm(
         ffi.cast("uint32_t*", xs_flat.ctypes.data),
@@ -54,19 +63,26 @@ def compute_conditional_ca_ctm(xs, ys, num_rules=100000, seed=42, boundary_mode=
         max_steps,
         ffi.cast("double*", ms_out.ctypes.data),
         ffi.cast("double*", ctms_out.ctypes.data),
-        match_rule_indices,
+        match_rule_numbers,
         match_rule_depths,
         match_counts
     )
 
+    # Decode results
     results = []
     for i in range(num_pairs):
         count = match_counts[i]
         matches = []
         for j in range(count):
-            rule_idx = match_rule_indices[i][j]
+            rule_ptr = match_rule_numbers[i][j]
+            rule_int = 0
+            for k in range(8):
+                rule_int |= int(rule_ptr[k]) << (64 * k)
             depth = match_rule_depths[i][j]
-            matches.append((rule_idx, depth))
-        results.append((ctms_out[i], ms_out[i], matches))
+            matches.append((rule_int, depth))
+        results.append((float(ctms_out[i]), float(ms_out[i]), matches))
+
+    # Free allocated memory on C side
+    C.free_matches(num_pairs, match_counts, match_rule_depths, match_rule_numbers)
 
     return results

@@ -2,76 +2,76 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
-#include "conditional_ca_ctm.h"
+
+#include <matrix_utils.h>
+#include <conditional_ca_ctm.h>
+
+#define NUM_PAIRS 2
+#define NUM_RULES 1000000
+#define RULE_UINT64_PARTS 8
 
 int main() {
-    uint32_t xs_flat[2 * 16] = {
-        // x0
-        0,0,0,0,
-        0,1,1,0,
-        0,1,1,0,
-        0,0,0,0,
-        // x1
-        0,0,1,0,
-        0,1,0,1,
-        1,0,1,0,
-        0,0,1,0,
+    uint32_t xs_flat[NUM_PAIRS][16] = {
+        {0,0,0,0,
+         0,1,1,0,
+         0,1,1,0,
+         0,0,0,0},
+
+        {0,0,0,1,
+         0,1,0,0,
+         0,0,1,0,
+         1,0,0,0}
     };
 
-    uint32_t ys_flat[2 * 16] = {
-        // y0
-        0,0,0,0,
-        0,0,1,0,
-        0,1,0,0,
-        0,0,0,0,
-        // y1
-        0,0,0,0,
-        0,1,1,0,
-        0,1,1,0,
-        0,0,0,0,
+    uint32_t ys_flat[NUM_PAIRS][16] = {
+        {0,0,0,0,
+         1,1,1,0,
+         1,1,1,0,
+         0,0,0,0},
+
+        {0,0,0,0,
+         0,0,1,0,
+         0,1,0,0,
+         0,0,0,0}
     };
 
-    int num_pairs = 2;
-    int num_rules = 100000;
-    int boundary_mode = 1;
-    int max_steps = 512;
-    unsigned int seed = 42;
+    double ms_out[NUM_PAIRS];
+    double ctms_out[NUM_PAIRS];
 
-    double ms_out[2], ks_out[2];
-
-    // === Allocate match info ===
-    int* match_rule_indices[2];
-    int* match_rule_depths[2];
-    int match_counts[2];
+    int* match_rule_depths[NUM_PAIRS];
+    uint64_t** match_rule_numbers[NUM_PAIRS];
+    int match_counts[NUM_PAIRS];
 
     run_ctm(
-        xs_flat,
-        ys_flat,
-        num_pairs,
-        num_rules,
-        seed,
-        boundary_mode,
-        max_steps,
+        (uint32_t*)xs_flat,
+        (uint32_t*)ys_flat,
+        NUM_PAIRS,
+        NUM_RULES,
+        42,
+        1,      // toroidal boundary
+        100,    // max steps
         ms_out,
-        ks_out,
-        match_rule_indices,
+        ctms_out,
+        match_rule_numbers,
         match_rule_depths,
         match_counts
     );
 
-    for (int i = 0; i < num_pairs; ++i) {
-        printf("Pair %d: m = %.6f, k = %.6f, matches = %d\n", i, ms_out[i], ks_out[i], match_counts[i]);
-        for (int j = 0; j < match_counts[i] && j < 5; ++j) {
-            printf("  Rule %d → depth %d\n", match_rule_indices[i][j], match_rule_depths[i][j]);
-        }
-        if (match_counts[i] > 5) {
-            printf("  ... (%d total)\n", match_counts[i]);
-        }
-    }
+    for (int i = 0; i < NUM_PAIRS; ++i) {
+        printf("Pair %d: m = %.6f, CTM = %.6f, matches = %d\n", i, ms_out[i], ctms_out[i], match_counts[i]);
+        // for (int j = 0; j < match_counts[i] && j < 3; ++j) { // print up to 3 matches
+        //     printf("  Match %d: depth = %d, rule = 0x", j, match_rule_depths[i][j]);
+        //     for (int k = RULE_UINT64_PARTS - 1; k >= 0; --k) {
+        //         printf("%016llx", (unsigned long long)match_rule_numbers[i][j][k]);
+        //     }
+        //     printf("\n");
+        // }
 
-    // === Free allocated match arrays ===
-    for (int i = 0; i < num_pairs; ++i) {
-        free(match_rule_indices[i]);
+        // Free rule number memory and depth array
+        for (int j = 0; j < match_counts[i]; ++j) {
+            free(match_rule_numbers[i][j]);
+        }
+        free(match_rule_numbers[i]);
         free(match_rule_depths[i]);
     }
 

@@ -1,7 +1,8 @@
-#ifndef CONDITIONAL_ECA_CTM_H
-#define CONDITIONAL_ECA_CTM_H
+#ifndef CONDITIONAL_CA_CTM_H
+#define CONDITIONAL_CA_CTM_H
 
 #include <stdint.h>
+#include "matrix_utils.h"  // includes Rule512, RULE_BYTES, Matrix
 
 void run_ctm(
     uint32_t* xs_flat,
@@ -13,9 +14,16 @@ void run_ctm(
     int max_steps,
     double* ms_out,
     double* ctms_out,
-    int** match_rule_indices,  // [num_pairs][match_counts[i]]
-    int** match_rule_depths,   // [num_pairs][match_counts[i]]
-    int* match_counts          // [num_pairs] — how many rules matched for each pair
+    uint64_t*** match_rule_numbers,
+    int** match_rule_depths,
+    int* match_counts
 );
 
-#endif
+void free_matches(
+    int num_pairs,
+    int* match_counts,
+    int** match_rule_depths,
+    uint64_t*** match_rule_numbers
+);
+
+#endif // CONDITIONAL_CA_CTM_H

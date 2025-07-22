@@ -1,10 +1,10 @@
-#ifndef CONDITIONAL_CA_CTM_H
-#define CONDITIONAL_CA_CTM_H
+#ifndef SIMULATE_RULE_MATCHES_H
+#define SIMULATE_RULE_MATCHES_H
 
 #include <stdint.h>
 #include "matrix_utils.h"  // includes Rule512, RULE_BYTES, Matrix
 
-void run_ctm(
+void simulate_rule_matches(
     uint32_t* xs_flat,
     uint32_t* ys_flat,
     int num_pairs,
@@ -12,8 +12,6 @@ void run_ctm(
     unsigned int seed,
     int boundary_mode,
     int max_steps,
-    double* ms_out,
-    double* ctms_out,
     uint64_t*** match_rule_numbers,
     int** match_rule_depths,
     int* match_counts
@@ -26,4 +24,4 @@ void free_matches(
     uint64_t*** match_rule_numbers
 );
 
-#endif // CONDITIONAL_CA_CTM_H
+#endif  // SIMULATE_RULE_MATCHES_H

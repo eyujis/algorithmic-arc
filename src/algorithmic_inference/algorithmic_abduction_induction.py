@@ -25,6 +25,47 @@ class AlgorithmicAbductionInduction:
         self.max_steps = max_steps
         self.abducted_rules = None  # Will store set or list of good rules
 
+    # -------------------- Filtering Phase --------------------
+    def filter_by_ctm_input(self, xs, ys, x_test, mode='absolute', threshold=2.0):
+        """
+        Filters (x_i, y_i) pairs whose CTM complexity is too different from x_test.
+
+        Parameters:
+            xs (np.ndarray): shape (N, 4, 4), input matrices
+            ys (np.ndarray): shape (N, 4, 4), corresponding outputs
+            x_test (np.ndarray): shape (4, 4), test input
+            mode (str): 'absolute' or 'percent'
+            threshold (float): threshold value in CTM units or percentage
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: filtered_xs, filtered_ys
+        """
+        bdm_2d = BDM(ndim=2, shape=(4, 4))  # ensure correct CTM table
+
+        # Get CTM complexity of x_test
+        key_test, c_test = next(bdm_2d.lookup([x_test]))
+
+        filtered_xs, filtered_ys = [], []
+
+        for x_i, y_i in zip(xs, ys):
+            try:
+                _, c_i = next(bdm_2d.lookup([x_i]))
+            except Exception:
+                continue  # skip if CTM is not found
+
+            if mode == 'absolute':
+                if abs(c_i - c_test) <= threshold:
+                    filtered_xs.append(x_i)
+                    filtered_ys.append(y_i)
+            elif mode == 'percent':
+                if abs(c_i - c_test) / c_test <= threshold:
+                    filtered_xs.append(x_i)
+                    filtered_ys.append(y_i)
+            else:
+                raise ValueError("mode must be 'absolute' or 'percent'")
+
+        return np.array(filtered_xs, dtype=np.uint8), np.array(filtered_ys, dtype=np.uint8)
+
     # -------------------- Abduction Phase --------------------
 
     def abduct_rules(self, xs, ys):

@@ -9,41 +9,35 @@ from pybdm import BDM
 class AlgorithmicAbductionInduction:
     bdm_1d = BDM(ndim=1)
 
-    def __init__(self, num_rules=1_000_000, top_k=None, seed=42, boundary_mode=1, max_steps=65536):
+    def __init__(self, num_rules=1_000_000, top_k=None, seed=42, boundary_mode=1, max_steps=65536, verbose=True):
         """
+        Abduction–Induction method using cellular automata and algorithmic complexity.
+
         Parameters:
             num_rules (int): Number of CA rules to sample
-            top_k (int): How many rules to keep after ranking (optional)
-            rule (int): Seed for reproducible rule generation
+            top_k (int): Number of top-ranked rules to use in induction (optional)
+            seed (int): Seed for reproducible rule generation
             boundary_mode (int): 1 = toroidal, 0 = zero-padded
             max_steps (int): Max steps per CA simulation
+            verbose (bool): Whether to print detailed logs
         """
         self.num_rules = num_rules
         self.top_k = top_k
         self.seed = seed
         self.boundary_mode = boundary_mode
         self.max_steps = max_steps
-        self.abducted_rules = None  # Will store set or list of good rules
+        self.verbose = verbose
+        self.abducted_rules = None
+
+    def _log(self, msg):
+        if self.verbose:
+            print(msg)
 
     # -------------------- Filtering Phase --------------------
     def filter_by_ctm_input(self, xs, ys, x_test, mode='absolute', threshold=2.0):
-        """
-        Filters (x_i, y_i) pairs whose CTM complexity is too different from x_test.
-
-        Parameters:
-            xs (np.ndarray): shape (N, 4, 4), input matrices
-            ys (np.ndarray): shape (N, 4, 4), corresponding outputs
-            x_test (np.ndarray): shape (4, 4), test input
-            mode (str): 'absolute' or 'percent'
-            threshold (float): threshold value in CTM units or percentage
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: filtered_xs, filtered_ys
-        """
-        bdm_2d = BDM(ndim=2, shape=(4, 4))  # ensure correct CTM table
-
-        # Get CTM complexity of x_test
+        bdm_2d = BDM(ndim=2, shape=(4, 4))
         key_test, c_test = next(bdm_2d.lookup([x_test]))
+        self._log(f"[Filter] x_test complexity: {c_test:.2f} (key: {key_test})")
 
         filtered_xs, filtered_ys = [], []
 
@@ -51,7 +45,7 @@ class AlgorithmicAbductionInduction:
             try:
                 _, c_i = next(bdm_2d.lookup([x_i]))
             except Exception:
-                continue  # skip if CTM is not found
+                continue
 
             if mode == 'absolute':
                 if abs(c_i - c_test) <= threshold:
@@ -64,17 +58,16 @@ class AlgorithmicAbductionInduction:
             else:
                 raise ValueError("mode must be 'absolute' or 'percent'")
 
+        self._log(f"[Filter] Retaining {len(filtered_xs)} / {len(xs)} training examples (mode={mode}, threshold={threshold})")
+        if len(filtered_xs) == 0:
+            self._log("[Filter] Warning: No training examples passed the complexity filter.")
+
         return np.array(filtered_xs, dtype=np.uint8), np.array(filtered_ys, dtype=np.uint8)
 
     # -------------------- Abduction Phase --------------------
-
     def abduct_rules(self, xs, ys):
-        """
-        For each (x, y), find CA rules that generate y from x.
-        Stores matched rules in self.abducted_rules.
-        Returns: dict of rule → list of (pair_index, depth), but only for rules matching all pairs.
-        """
-        print("[Abduction] Simulating rule matches on training pairs...")
+        self._log(f"[Abduction] Searching for CA rules matching {len(xs)} training pairs...")
+
         results = simulate_rule_matches(
             xs,
             ys,
@@ -84,16 +77,13 @@ class AlgorithmicAbductionInduction:
             max_steps=self.max_steps
         )
 
-        # First collect the set of matching rules per pair
         rule_sets = []
         for matches in results:
             matched_rules = {rule_int for rule_int, _ in matches}
             rule_sets.append(matched_rules)
 
-        # Find rules that match all (x, y) pairs
         common_rules = set.intersection(*rule_sets) if rule_sets else set()
 
-        # Filter to only include common rules in the output mapping
         rule_to_matches = defaultdict(list)
         for i, matches in enumerate(results):
             for rule_int, depth in matches:
@@ -101,21 +91,13 @@ class AlgorithmicAbductionInduction:
                     rule_to_matches[rule_int].append((i, depth))
 
         self.abducted_rules = list(common_rules)
+        self._log(f"[Abduction] Found {len(self.abducted_rules)} rules that match all training pairs.")
 
-        print(f"[Abduction] Found {len(self.abducted_rules)} rules that match all training pairs.")
         return rule_to_matches
 
     # -------------------- Ranking Phase --------------------
-
     def rank_abducted_rules_by_bdm(self, rules):
-        """
-        Rank 512-bit rules using 1D BDM complexity.
-        Input:
-            rules (List[int]) — list of rule integers
-        Output:
-            List[(rule_int, bdm_score)] sorted by ascending BDM
-        """
-        print("[Ranking] Computing 1D BDM for rules...")
+        self._log(f"[Ranking] Ranking {len(rules)} rules by BDM complexity...")
 
         scored = []
         for rule_int in rules:
@@ -124,32 +106,24 @@ class AlgorithmicAbductionInduction:
             scored.append((rule_int, bdm_score))
 
         ranked = sorted(scored, key=lambda t: t[1])
-        print(f"[Ranking] Done. Ranked {len(ranked)} rules by simplicity.")
+
+        for i, (rule, score) in enumerate(ranked[:5]):
+            self._log(f"  Top {i+1}: Rule {rule} → BDM = {score:.2f}")
+
         return ranked
-    
+
     @staticmethod
     def rule_to_1d_array(rule_int):
-        """Convert a 512-bit int into a 1D binary array of 0s and 1s."""
         bin_str = format(rule_int, '0512b')
         return np.array([int(b) for b in bin_str], dtype=int)
 
     # -------------------- Induction Phase --------------------
-
     def induce_outputs_from_rules(self, x_test, rules):
-        """
-        Apply each rule to x_test and collect reachable outputs.
-        Output:
-            Dict[y'_key] = {
-                'rules': [...],
-                't_min': int,
-                't_mean': float,
-                'matrix': np.array
-            }
-        """
+        self._log(f"[Induction] Applying {len(rules)} rules to x_test...")
+
         results = {}
 
         for rule_int in rules:
-            # Convert 512-bit rule integer to 8×uint64 parts
             rule_parts = [(rule_int >> (64 * i)) & ((1 << 64) - 1) for i in range(8)]
             rules_flat = np.array(rule_parts, dtype=np.uint64).reshape(1, 8)
 
@@ -176,38 +150,16 @@ class AlgorithmicAbductionInduction:
                     results[y_key]['depths'].append(depth)
                     results[y_key]['t_min'] = min(results[y_key]['t_min'], depth)
 
-        # Compute t_mean for each entry
         for y_key, meta in results.items():
             meta['t_mean'] = float(np.mean(meta.pop('depths')))
 
+        self._log(f"[Induction] Generated {len(results)} unique output candidates from rule applications.")
         return results
 
-
     def estimate_k_ctm(self, y_prime_data, total_rules, time_metric='t_min'):
-        """
-        Estimate conditional complexity and metadata for each y' using:
-            K(y'|x_test) = -log2(freq) + log2(time)
-        where time is either t_min (default) or t_mean.
-
-        Args:
-            y_prime_data (dict): Dict[y_key] = {
-                'rules': [...], 't_min': int, 't_mean': float, 'matrix': np.array
-            }
-            total_rules (int): Total number of rules evaluated (for computing frequency)
-            time_metric (str): One of ['t_min', 't_mean'], default = 't_min'
-
-        Returns:
-            Dict[y_key] = {
-                'k_ctm': float,
-                'num_rules': int,
-                'm_y_given_x': float,
-                't_min': int,
-                't_mean': float,
-                'matrix': np.array
-            }
-        """
         assert time_metric in ['t_min', 't_mean'], f"Invalid time_metric: {time_metric}"
 
+        self._log(f"[Estimate] Estimating K(y|x_test) for {len(y_prime_data)} candidates using {total_rules} rules...")
         scores = {}
 
         for y_key, data in y_prime_data.items():
@@ -239,29 +191,14 @@ class AlgorithmicAbductionInduction:
                 'matrix': data['matrix']
             }
 
+        for i, (y_key, meta) in enumerate(list(scores.items())[:3]):
+            self._log(f"  y'#{i+1}: k_ctm = {meta['k_ctm']:.2f}, m(y|x) = {meta['m_y_given_x']:.5f}, t_min = {meta['t_min']}")
+
         return scores
 
-
     def select_inductive_hypothesis(self, k_ctm_scores):
-        """
-        Select the y' with the lowest estimated conditional complexity,
-        excluding outputs that appeared at step 0 (i.e., equal to x_test).
+        self._log(f"[Selection] Selecting from {len(k_ctm_scores)} candidate outputs...")
 
-        Args:
-            k_ctm_scores (dict): Dict[y_key] = {
-                'k_ctm': float,
-                'num_rules': int,
-                'prob': float,
-                't_min': int,
-                'matrix': np.ndarray
-            }
-
-        Returns:
-            Tuple:
-                - selected_hypothesis (dict)
-                - sorted_candidates (List[Tuple[y_key, metadata_dict]])
-        """
-        # Filter out outputs that appeared at step 0
         filtered = {
             y_key: data
             for y_key, data in k_ctm_scores.items()
@@ -269,31 +206,47 @@ class AlgorithmicAbductionInduction:
         }
 
         if not filtered:
+            self._log("[Selection] No valid outputs (all t_min = 0 or k_ctm = ∞).")
             return None, []
 
-        # Sort by k_ctm
         sorted_items = sorted(filtered.items(), key=lambda item: item[1]['k_ctm'])
         best_y_key, best_metadata = sorted_items[0]
 
+        self._log(f"[Selection] Best output selected with k_ctm = {best_metadata['k_ctm']:.2f}")
         return best_metadata, sorted_items
-
     
+    # -------------------- Pipeline --------------------
+    def run(self, xs, ys, x_test):
+        """
+        Full abduction–induction pipeline (no filtering).
+
+        Args:
+            xs: List of input training matrices
+            ys: List of output training matrices
+            x_test: Test input matrix
+
+        Returns:
+            The best predicted output y' as a 4x4 matrix, or None if no valid output was found.
+        """
+        rule_matches = self.abduct_rules(xs, ys)
+
+        if self.top_k is not None:
+            ranked = self.rank_abducted_rules_by_bdm(list(rule_matches.keys()))
+            top_rules = [r for r, _ in ranked[:self.top_k]]
+        else:
+            top_rules = list(rule_matches.keys())
+
+        y_prime_data = self.induce_outputs_from_rules(x_test, top_rules)
+        k_ctm_scores = self.estimate_k_ctm(y_prime_data, total_rules=self.num_rules)
+        best_output, _ = self.select_inductive_hypothesis(k_ctm_scores)
+
+        return best_output['matrix'] if best_output else None
+
     @staticmethod
     def _matrix_to_key(matrix):
-        """Convert 4×4 binary matrix to hashable, reversible tuple key."""
         return tuple(matrix.flatten())
 
     @staticmethod
     def _key_to_matrix(key):
-        """Convert hashable key back to 4×4 matrix."""
         return np.array(key, dtype=np.uint8).reshape((4, 4))
-
-    # -------------------- Pipeline --------------------
-
-    def run(self, xs, ys, x_test):
-        """
-        Full abduction + induction pipeline.
-        Returns the best predicted output y' for x_test.
-        """
-        raise NotImplementedError
 
